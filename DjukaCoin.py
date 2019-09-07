@@ -73,7 +73,7 @@ class Blockchain:
             block_index += 1
         return True
 
-    def add_transactions(self, sender, receiver, amount):
+    def add_transaction(self, sender, receiver, amount):
         self.transactions.append({'sender': sender,
                                   'receiver': receiver,
                                   'amound': amount})
@@ -112,6 +112,8 @@ app = Flask(__name__)
 # Part 2 - Mining our Blockchain
 blockchain = Blockchain()
 
+# -- Create address for the node on Port 5000
+node_address = str(uuid4()).replace('-', '')
 
 # Mining a new block
 @app.route('/mine-block', methods=['GET'])
@@ -120,12 +122,14 @@ def mine_block():
     previous_proof = previous_block['proof']
     proof = blockchain.proof_of_work(previous_proof)
     previous_hash = blockchain.hash(previous_block)
+    blockchain.add_transaction(sender=node_address, receiver='Djukeezy', amount=1)
     block = blockchain.create_block(proof, previous_hash)
     response = {'message': 'Congrats! You just mined a block!',
                 'index': block['index'],
                 'timestamp': block['timestamp'],
                 'proof': block['proof'],
-                'previous_hash': block['previous_hash']}
+                'previous_hash': block['previous_hash'],
+                'transactions': block['transactions']}
     return jsonify(response), 200
 
 
@@ -141,6 +145,47 @@ def get_chain():
 @app.route('/check-chain-valid', methods=['GET'])
 def check_chain_valid():
     response = {'is-chain-valid': blockchain.is_chain_valid(blockchain.chain)}
+    return jsonify(response), 200
+
+
+# -- Adding transaction to blockchain
+@app.route('/add-transaction', methods=['POST'])
+def add_transaction():
+    json = request.get_json()
+    transaction_keys = ['sender', 'receiver', 'amount']
+    if not all(key in json for key in transaction_keys):
+        return 'Some elements of the transaction are missing!', 400
+    index = blockchain.add_transaction(json['sender'], json['receiver'], json['amount'])
+    response = {'message': f'This transaction will be added to Block {index}'}
+    return jsonify(response), 201
+
+
+# -- Connecting new nodes
+@app.route('/connect-node', methods=['POST'])
+def connect_node():
+    json = request.get_json()
+    nodes = json.get('nodes')
+    if nodes is None:
+        return 'No nodes!', 400
+    for node in nodes:
+        blockchain.add_node(node)
+    response = {
+        'message': f'All nodes are now connected. The DjukaCoin now contains the following coins:',
+        'total-nodes': list(blockchain.nodes)
+    }
+    return jsonify(response), 201
+
+
+# Replacing the chain by the longest chain if needed
+@app.route('/replace-chain', methods=['GET'])
+def replace_chain():
+    is_chain_replaced = blockchain.replace_chain()
+    if is_chain_replaced:
+        response = {'message': f'The nodes had different chains so the chain was replaced by the longest one',
+                    'new-chain': blockchain.chain}
+    else:
+        response = {'message': f'All good the chain is the longest one.',
+                    'actual-chain': blockchain.chain}
     return jsonify(response), 200
 
 

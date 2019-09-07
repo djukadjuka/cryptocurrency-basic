@@ -1,38 +1,44 @@
-# Module 1 - Create a blockchain
+
+# Module 2 - Creating CryptoCurrency DjukaCoin
 
 # To be installed:
-# Flask==0.12.2: pip install Flask==0.12.2
-# Postman HTTP Client: https://www.getpostman.com/
-
-# =======================
-# NOT USED - ARCHIVE ONLY
-# =======================
+# Flask == 0.12.2: pip install Flask==0.12.2
+# Postman: https://www.getpostman.com/
+# requests: requests==2.18.4: pip install requests==2.18.4
 
 import datetime
 import hashlib
 import json
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
+import requests
+from uuid import uuid4
+from urllib.parse import urlparse
 
-# Part 1 - Building a Blockchain
 
 class Blockchain:
 
     def __init__(self):
         self.chain = []
-        self.create_block(proof = 1, previous_hash = '0')
+        # -- Create a list of transactions
+        self.transactions = []
+        # -- Add genesis block
+        self.create_block(proof=1, previous_hash='0')
+        self.nodes = set()
 
     def create_block(self, proof, previous_hash):
         block = {'index': len(self.chain) + 1,
                  'timestamp': str(datetime.datetime.now()),
                  'proof': proof,
-                 'previous_hash': previous_hash
+                 'previous_hash': previous_hash,
+                 'transactions': self.transactions
                  }
+        self.transactions = []
         self.chain.append(block)
         return block
-    
+
     def get_previous_block(self):
         return self.chain[-1]
-    
+
     # Create a problem that is hard to find but easy to verify
     # This will be needed for the create block function
     def proof_of_work(self, previous_proof):
@@ -40,17 +46,17 @@ class Blockchain:
         check_proof = False
         while check_proof is False:
             # The problem that miners have to solve
-            hash_operation = hashlib.sha256(str(new_proof**2 - previous_proof**2).encode()).hexdigest()
+            hash_operation = hashlib.sha256(str(new_proof ** 2 - previous_proof ** 2).encode()).hexdigest()
             if hash_operation[:4] == "0000":
                 check_proof = True
             else:
                 new_proof += 1
         return new_proof
-    
+
     def hash(self, block):
-        encoded_block = json.dumps(block, sort_keys = True).encode()
+        encoded_block = json.dumps(block, sort_keys=True).encode()
         return hashlib.sha256(encoded_block).hexdigest()
-    
+
     def is_chain_valid(self, chain):
         previous_block = chain[0]
         block_index = 1
@@ -60,18 +66,52 @@ class Blockchain:
                 return False
             previous_proof = previous_block['proof']
             proof = block['proof']
-            hash_operation = hashlib.sha256(str(proof**2 - previous_proof**2).encode()).hexdigest()
+            hash_operation = hashlib.sha256(str(proof ** 2 - previous_proof ** 2).encode()).hexdigest()
             if hash_operation[:4] != "0000":
                 return False
             previous_block = block
             block_index += 1
         return True
 
+    def add_transactions(self, sender, receiver, amount):
+        self.transactions.append({'sender': sender,
+                                  'receiver': receiver,
+                                  'amound': amount})
+        previous_block = self.get_previous_block()
+        return previous_block['index'] + 1
+
+    def add_node(self, address):
+        # -- Parse address of the node
+        parsed_url = urlparse(address)
+        self.nodes.add(parsed_url.netloc)
+
+    def replace_chain(self):
+        # -- Looking for longest chain
+        network = self.nodes
+        longest_chain = None
+        max_length = len(self.chain)
+        for node in network:
+            # -- Call api for this nodes netloc
+            response = requests.get(f'http://{node}/get-chain')
+            # -- Do other stuff if the response is 200 OK
+            if response.status_code == 200:
+                length = response.json()['length']
+                chain = response.json()['chain']
+                if length > max_length and self.is_chain_valid(chain):
+                    max_length = length
+                    longest_chain = chain
+        # -- If the longest chain is not None that means that it was replaced
+        if longest_chain:
+            self.chain = longest_chain
+            return True
+        return False
+
 # Creating a web app
 app = Flask(__name__)
-    
+
 # Part 2 - Mining our Blockchain
 blockchain = Blockchain()
+
 
 # Mining a new block
 @app.route('/mine-block', methods=['GET'])
@@ -88,6 +128,7 @@ def mine_block():
                 'previous_hash': block['previous_hash']}
     return jsonify(response), 200
 
+
 # Getting the full Blockchain
 @app.route('/get-chain', methods=['GET'])
 def get_chain():
@@ -102,5 +143,7 @@ def check_chain_valid():
     response = {'is-chain-valid': blockchain.is_chain_valid(blockchain.chain)}
     return jsonify(response), 200
 
+
 # Running the app
 app.run(host='0.0.0.0', port=5000)
+

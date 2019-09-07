@@ -1,6 +1,10 @@
 
 # Module 2 - Creating CryptoCurrency DjukaCoin
 
+# =======================
+# This client is Djukeezy
+# =======================
+
 # To be installed:
 # Flask == 0.12.2: pip install Flask==0.12.2
 # Postman: https://www.getpostman.com/
@@ -190,5 +194,5 @@ def replace_chain():
 
 
 # Running the app
-app.run(host='0.0.0.0', port=5000)
+app.run(host='0.0.0.0', port=5002)
 
